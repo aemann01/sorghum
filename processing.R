@@ -1,5 +1,5 @@
 ####DADA2 16S Amplicon Processing####
-# tortoise processing
+# sorghum processing
 
 ####DADA2 16S Amplicon Processing####
 #When running this script it's best to run it interactively in the R environment to be sure each step works as expected
@@ -36,6 +36,8 @@ library(ShortRead)
 library(Biostrings)
 library(seqinr)
 library(phyloseq)
+library(ape)
+library(phytools)
 
 ####Environment Setup####
 theme_set(theme_bw())
@@ -117,13 +119,6 @@ rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]),
       REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]), 
       REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
 
-
-
-
-
-
-
-
 # Forward and reverse fastq filenames have the format:
 cutFs <- sort(list.files(path.cut, pattern = "R1", full.names = TRUE))
 cutRs <- sort(list.files(path.cut, pattern = "R2", full.names = TRUE))
@@ -172,7 +167,7 @@ dadaRs[[1]]
 #samples_to_keep <- as.numeric(out[,"reads.out"]) > 500 #example of simple method used above after the filter and trim step. if you already did this but still got an error when merging, try the steps below
 getN <- function(x) sum(getUniques(x)) #keeping track of read retention, number of unique sequences after ASV inference
 track <- cbind(sapply(derepFs, getN), sapply(derepRs, getN), sapply(dadaFs, getN), sapply(dadaRs, getN))
-samples_to_keep <- track[,4] > 500 #your threshold. try different ones to get the lowest one that will work. #this method accounts for dereplication/ASVs left after inference
+samples_to_keep <- track[,4] > 100 #your threshold. try different ones to get the lowest one that will work. #this method accounts for dereplication/ASVs left after inference
 samples_to_remove <- names(samples_to_keep)[which(samples_to_keep == FALSE)] #record names of samples you have the option of removing
 
 ####merge paired reads####
@@ -264,9 +259,9 @@ colnames(seqtab.nosingletons.nochim) <- ASV.num #rename your ASVs in the taxonom
 #reference database should be in qiime format: qiime tools import --input-path ezbiocloud_qiime_full.fasta --output-path ezbiocloud_qiime_full.qza --type 'FeatureData[Sequence]'
 #also taxonomy file: qiime tools import --type 'FeatureData[Taxonomy]' --input-format HeaderlessTSVTaxonomyFormat --input-path ezbiocloud_id_taxonomy.txt --output-path ezbiocloud_id_taxonomy.qza
 #pull the region of interest from full length 16S sequences (is better for classification): qiime feature-classifier extract-reads --i-sequences ezbiocloud_qiime_full.qza --p-f-primer GTGYCAGCMGCCGCGGTAA --p-r-primer GGACTACNVGGGTWTCTAAT --p-min-length 200 --p-max-length 300 --o-reads ezbiocloud_qiime_v4region.qza
-system("/home/lymelab/miniconda2/envs/qiime2-2019.7/bin/qiime tools import --input-path rep_set_fix.fa --output-path rep_set_fix.qza --type 'FeatureData[Sequence]'")
+system("/home/lymelab/miniconda2/envs/qiime2-2019.7/bin/qiime tools import --input-path rep_set.fa --output-path rep_set.qza --type 'FeatureData[Sequence]'")
 system("rm -r assigntax")
-system(sprintf("/home/lymelab/miniconda2/envs/qiime2-2019.7/bin/qiime feature-classifier classify-consensus-vsearch --i-query rep_set_fix.qza --i-reference-reads %s --i-reference-taxonomy %s --output-dir assigntax", BACREF, BACTAX))
+system(sprintf("/home/lymelab/miniconda2/envs/qiime2-2019.7/bin/qiime feature-classifier classify-consensus-vsearch --i-query rep_set.qza --i-reference-reads %s --i-reference-taxonomy %s --output-dir assigntax", BACREF, BACTAX))
 system("unzip assigntax/classification.qza -d assigntax/")
 
 #get file path for taxonomy file
@@ -310,3 +305,7 @@ write.table(data.frame("row_names"=rownames(seqtab.filtered),seqtab.filtered),"s
 system("seqtk subseq rep_set.fa wanted.ids > rep_set.filt.fa")
 system("mafft --auto rep_set.filt.fa > rep_set.filt.align.fa")
 system("fasttree -nt rep_set.filt.align.fa > rep_set.filt.tre")
+#midpoint root tree
+tre <- read.tree("rep_set.filt.tre")
+root <- midpoint.root(tre)
+write.tree(root, "rep_set.root.tre")
